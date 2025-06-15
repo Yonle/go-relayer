@@ -9,6 +9,8 @@ only using stdlib. concurrency is achieved via goroutine.
 ```
 $ ./gwproxy
 Usage of ./gwproxy:
+  -dial-as string
+        Dial to upstream with specified local IP address
   -from string
         Bind address
   -keepalive
