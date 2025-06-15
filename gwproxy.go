@@ -79,7 +79,7 @@ func startListening() {
 		conn, err = listen.Accept()
 		if err != nil {
 			log.Println("failed accepting incomming conn:", err)
-			return
+			continue
 		}
 
 		ip := conn.RemoteAddr().String()
