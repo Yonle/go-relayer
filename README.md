@@ -11,6 +11,12 @@ $ ./gwproxy
 Usage of ./gwproxy:
   -from string
         Bind address
+  -keepalive
+        Enable KeepAlive (TCP)
+  -keepalive-idle string
+        Keep Alive idle duration (default "15s")
+  -keepalive-interval string
+        Keep Alive interval duration (default "15s")
   -proto string
         Protocol to use (default "tcp")
   -timeout string
