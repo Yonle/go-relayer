@@ -97,7 +97,7 @@ func startListening() {
 }
 
 func handleConn(conn net.Conn, c_ip string) {
-	defer conn.Close()
+	defer conn.Close() // close client after copy
 
 	upstream, err := dialer.Dial(proto, targetAddr)
 
@@ -115,14 +115,14 @@ func handleConn(conn net.Conn, c_ip string) {
 		}
 	}
 
-	go feedToClient(upstream, conn) // conn -> upstream
-	io.Copy(conn, upstream)         // conn <- upstream
+	go feedToClient(conn, upstream) // conn <- upstream
+	io.Copy(upstream, conn)         // upstream <- conn
 }
 
-func feedToClient(u, c net.Conn) {
-	defer u.Close()
+func feedToClient(c, u net.Conn) {
+	defer u.Close() // close upstream after copy
 
-	io.Copy(u, c)
+	io.Copy(c, u)
 }
 
 func parseDur(t, k string) (d time.Duration) {
