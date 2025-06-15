@@ -55,6 +55,13 @@ func main() {
 
 		ip := conn.RemoteAddr().String()
 
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			// This is a TCP connection. Establish NODELAY
+			if err := tcpConn.SetNoDelay(true); err != nil {
+				log.Println(ip, "client SetNoDelay(true) failed:", err)
+			}
+		}
+
 		// Let different conn to handle it
 		go handleConn(conn, ip)
 	}
@@ -71,6 +78,13 @@ func handleConn(conn net.Conn, c_ip string) {
 	}
 
 	defer upstream.Close()
+
+	if tcpConn, ok := upstream.(*net.TCPConn); ok {
+		// This is a TCP connection. Establish NODELAY
+		if err := tcpConn.SetNoDelay(true); err != nil {
+			log.Println(c_ip, "upstream SetNoDelay(true) failed:", err)
+		}
+	}
 
 	go feedToClient(upstream, conn) // conn -> upstream
 	io.Copy(conn, upstream)         // conn <- upstream
