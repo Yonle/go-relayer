@@ -4,7 +4,7 @@ a random toy.
 
 could be useful.
 
-concurrency is achieved via goroutine.
+10% only using stdlib. concurrency is achieved via goroutine.
 
 ```
 $ ./gwproxy

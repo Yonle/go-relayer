@@ -8,9 +8,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"syscall"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 var proto string
@@ -71,16 +70,16 @@ func main() {
 func prepareRLimit() {
 	// Ref:
 	// https://github.com/alviroiskandar/gwproxy/blob/4090c92d911c89acf5ac95fa8a9e96ec444837c1/gwproxy.c#L133
-	var rlim unix.Rlimit
+	var rlim syscall.Rlimit
 
-	if err := unix.Getrlimit(unix.RLIMIT_NOFILE, &rlim); err != nil {
+	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rlim); err != nil {
 		log.Printf("Warning: Unable to get RLimit: %v", err)
 		return
 	}
 
 	rlim.Cur = rlim.Max
 
-	if err := unix.Setrlimit(unix.RLIMIT_NOFILE, &rlim); err != nil {
+	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rlim); err != nil {
 		log.Printf("Warning: Unable to raise RLIMIT: %v", err)
 	}
 
