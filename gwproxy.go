@@ -6,16 +6,25 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 var proto string
 var bindAddr string
 var targetAddr string
 
+var dialer net.Dialer
+
 func main() {
+	var timeoutStr string
+	var err error
+	var conn net.Conn
+	var listener net.Listener
+
 	flag.StringVar(&proto, "proto", "tcp", "Protocol to use")
 	flag.StringVar(&bindAddr, "from", "", "Bind address")
 	flag.StringVar(&targetAddr, "to", "", "Proxy target")
+	flag.StringVar(&timeoutStr, "timeout", "5s", "Timeout duration for upstream dial")
 
 	flag.Parse()
 
@@ -24,15 +33,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Printf("[Proto: %s] Now listening to %s", proto, bindAddr)
-	l, err := net.Listen(proto, bindAddr)
+	dialer.Timeout, err = time.ParseDuration(timeoutStr)
 
 	if err != nil {
-		panic(err)
+		log.Fatal("failed to parse timeout value:", err)
+	}
+
+	log.Printf("[Proto: %s] Now listening to %s", proto, bindAddr)
+	listener, err = net.Listen(proto, bindAddr)
+
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	for {
-		conn, err := l.Accept()
+		conn, err = listener.Accept()
 		if err != nil {
 			log.Println("failed accepting incomming conn:", err)
 			return

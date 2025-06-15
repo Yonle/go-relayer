@@ -13,6 +13,8 @@ Usage of ./gwproxy:
         Bind address
   -proto string
         Protocol to use (default "tcp")
+  -timeout string
+        Timeout duration for upstream dial (default "5s")
   -to string
         Proxy target
 ```
