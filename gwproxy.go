@@ -46,7 +46,6 @@ func main() {
 }
 
 func handleConn(conn net.Conn, c_ip string) {
-	defer log.Println(c_ip, "closed client socket.")
 	defer conn.Close()
 
 	upstream, err := net.Dial(proto, targetAddr)
@@ -55,8 +54,6 @@ func handleConn(conn net.Conn, c_ip string) {
 		log.Println(c_ip, "failed dialing to upstream:", err)
 		return
 	}
-
-	log.Println(c_ip, "establishing stream with", targetAddr)
 
 	defer upstream.Close()
 
