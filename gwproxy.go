@@ -3,16 +3,20 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 var proto string
 var ListenAddr string
 var targetAddr string
+var timeout time.Duration
 
 var dialer net.Dialer
 var listener net.ListenConfig
@@ -48,7 +52,6 @@ func main() {
 	keepAliveConf.Idle = parseDur(keepAlive_IdleStr, "keepalive-idle")
 	keepAliveConf.Interval = parseDur(keepAlive_IntervalStr, "keepalive-interval")
 
-	dialer.Timeout = parseDur(timeoutStr, "timeout")
 	dialer.KeepAliveConfig = keepAliveConf
 
 	if len(bindAddr) != 0 {
@@ -57,9 +60,31 @@ func main() {
 		}
 	}
 
+	timeout = parseDur(timeoutStr, "timeout")
+
 	listener.KeepAliveConfig = keepAliveConf
 
+	prepareRLimit()
 	startListening()
+}
+
+func prepareRLimit() {
+	// Ref:
+	// https://github.com/alviroiskandar/gwproxy/blob/4090c92d911c89acf5ac95fa8a9e96ec444837c1/gwproxy.c#L133
+	var rlim unix.Rlimit
+
+	if err := unix.Getrlimit(unix.RLIMIT_NOFILE, &rlim); err != nil {
+		log.Printf("Warning: Unable to get RLimit: %v", err)
+		return
+	}
+
+	rlim.Cur = rlim.Max
+
+	if err := unix.Setrlimit(unix.RLIMIT_NOFILE, &rlim); err != nil {
+		log.Printf("Warning: Unable to raise RLIMIT: %v", err)
+	}
+
+	log.Printf("RLIMIT_NOFILE set to %d", rlim.Cur)
 }
 
 func startListening() {
@@ -99,7 +124,7 @@ func startListening() {
 func handleConn(conn net.Conn, c_ip string) {
 	defer conn.Close() // close client after copy
 
-	upstream, err := dialer.Dial(proto, targetAddr)
+	upstream, err := dialer.DialContext(makeDeadlineCtx(), proto, targetAddr)
 
 	if err != nil {
 		log.Println(c_ip, "failed dialing to upstream:", err)
@@ -133,5 +158,14 @@ func parseDur(t, k string) (d time.Duration) {
 		log.Printf("Failed to parse duration value of %s: %v", k, err)
 	}
 
+	return
+}
+
+func makeDeadlineCtx() (ctx context.Context) {
+	ctx, _ = context.WithDeadlineCause(
+		context.Background(),
+		time.Now().Add(timeout),
+		fmt.Errorf("Connection to upstream is timed out."),
+	)
 	return
 }
