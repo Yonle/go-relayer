@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io"
 	"log"
@@ -14,17 +15,22 @@ var bindAddr string
 var targetAddr string
 
 var dialer net.Dialer
+var listener net.ListenConfig
 
 func main() {
 	var timeoutStr string
-	var err error
-	var conn net.Conn
-	var listener net.Listener
+	var keepAlive bool
+	var keepAlive_IdleStr string
+	var keepAlive_IntervalStr string
 
 	flag.StringVar(&proto, "proto", "tcp", "Protocol to use")
 	flag.StringVar(&bindAddr, "from", "", "Bind address")
 	flag.StringVar(&targetAddr, "to", "", "Proxy target")
 	flag.StringVar(&timeoutStr, "timeout", "5s", "Timeout duration for upstream dial")
+
+	flag.BoolVar(&keepAlive, "keepalive", false, "Enable KeepAlive (TCP)")
+	flag.StringVar(&keepAlive_IdleStr, "keepalive-idle", "15s", "Keep Alive idle duration")
+	flag.StringVar(&keepAlive_IntervalStr, "keepalive-interval", "15s", "Keep Alive interval duration")
 
 	flag.Parse()
 
@@ -33,21 +39,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	dialer.Timeout, err = time.ParseDuration(timeoutStr)
+	keepAliveConf := net.KeepAliveConfig{}
+	keepAliveConf.Enable = keepAlive
+	keepAliveConf.Idle = parseDur(keepAlive_IdleStr, "keepalive-idle")
+	keepAliveConf.Interval = parseDur(keepAlive_IntervalStr, "keepalive-interval")
 
-	if err != nil {
-		log.Fatal("failed to parse timeout value:", err)
-	}
+	dialer.Timeout = parseDur(timeoutStr, "timeout")
+	dialer.KeepAliveConfig = keepAliveConf
+
+	listener.KeepAliveConfig = keepAliveConf
+
+	startListening()
+}
+
+func startListening() {
+	var listen net.Listener
+	var err error
 
 	log.Printf("[Proto: %s] Now listening to %s", proto, bindAddr)
-	listener, err = net.Listen(proto, bindAddr)
+	listen, err = listener.Listen(context.Background(), proto, bindAddr)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	var conn net.Conn
+
 	for {
-		conn, err = listener.Accept()
+		conn, err = listen.Accept()
 		if err != nil {
 			log.Println("failed accepting incomming conn:", err)
 			return
@@ -70,7 +89,7 @@ func main() {
 func handleConn(conn net.Conn, c_ip string) {
 	defer conn.Close()
 
-	upstream, err := net.Dial(proto, targetAddr)
+	upstream, err := dialer.Dial(proto, targetAddr)
 
 	if err != nil {
 		log.Println(c_ip, "failed dialing to upstream:", err)
@@ -94,4 +113,15 @@ func feedToClient(u, c net.Conn) {
 	defer u.Close()
 
 	io.Copy(u, c)
+}
+
+func parseDur(t, k string) (d time.Duration) {
+	var err error
+	d, err = time.ParseDuration(t)
+
+	if err != nil {
+		log.Printf("Failed to parse duration value of %s: %v", k, err)
+	}
+
+	return
 }
