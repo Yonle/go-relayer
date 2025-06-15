@@ -11,7 +11,7 @@ import (
 )
 
 var proto string
-var bindAddr string
+var ListenAddr string
 var targetAddr string
 
 var dialer net.Dialer
@@ -23,22 +23,22 @@ func main() {
 	var keepAlive_IdleStr string
 	var keepAlive_IntervalStr string
 
-	var dialAs string
+	var bindAddr string
 
 	flag.StringVar(&proto, "proto", "tcp", "Protocol to use")
-	flag.StringVar(&bindAddr, "from", "", "Bind address")
-	flag.StringVar(&targetAddr, "to", "", "Proxy target")
+	flag.StringVar(&ListenAddr, "from", "", "Listen to address")
+	flag.StringVar(&targetAddr, "to", "", "Upstream target address")
 	flag.StringVar(&timeoutStr, "timeout", "5s", "Timeout duration for upstream dial")
 
 	flag.BoolVar(&keepAlive, "keepalive", false, "Enable KeepAlive (TCP)")
 	flag.StringVar(&keepAlive_IdleStr, "keepalive-idle", "15s", "Keep Alive idle duration")
 	flag.StringVar(&keepAlive_IntervalStr, "keepalive-interval", "15s", "Keep Alive interval duration")
 
-	flag.StringVar(&dialAs, "dial-as", "", "Dial to upstream with specified local IP address")
+	flag.StringVar(&bindAddr, "bind", "", "Dial to upstream with specified local IP address (Bind)")
 
 	flag.Parse()
 
-	if len(bindAddr) == 0 || len(targetAddr) == 0 {
+	if len(ListenAddr) == 0 || len(targetAddr) == 0 {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -51,9 +51,9 @@ func main() {
 	dialer.Timeout = parseDur(timeoutStr, "timeout")
 	dialer.KeepAliveConfig = keepAliveConf
 
-	if len(dialAs) != 0 {
+	if len(bindAddr) != 0 {
 		dialer.LocalAddr = &net.IPAddr{
-			IP: net.ParseIP(dialAs),
+			IP: net.ParseIP(bindAddr),
 		}
 	}
 
@@ -66,8 +66,8 @@ func startListening() {
 	var listen net.Listener
 	var err error
 
-	log.Printf("[Proto: %s] Now listening to %s", proto, bindAddr)
-	listen, err = listener.Listen(context.Background(), proto, bindAddr)
+	log.Printf("[Proto: %s] Now listening to %s", proto, ListenAddr)
+	listen, err = listener.Listen(context.Background(), proto, ListenAddr)
 
 	if err != nil {
 		log.Fatal(err)
