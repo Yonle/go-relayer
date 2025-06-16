@@ -165,7 +165,7 @@ func startListening() {
 			ClientIP: ip,
 		}
 
-		s.handle()
+		go s.handle()
 	}
 }
 
