@@ -18,6 +18,8 @@ Usage of ./go-relayer:
     	Keep Alive idle duration (default "15s")
   -keepalive-interval string
     	Keep Alive interval duration (default "15s")
+  -notimer
+      Disable timer, effectively disabling -timeout
   -proto string
     	Protocol to use (default "tcp")
   -timeout string
