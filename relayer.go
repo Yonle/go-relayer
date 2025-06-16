@@ -19,6 +19,7 @@ var proto string
 var ListenAddr string
 var targetAddr string
 var timeout time.Duration
+var notimer bool
 
 var clientBufferSize int
 var upstreamBufferSize int
@@ -49,6 +50,7 @@ func main() {
 	flag.StringVar(&ListenAddr, "from", "", "Listen to address")
 	flag.StringVar(&targetAddr, "to", "", "Destination to upstream address")
 	flag.StringVar(&timeoutStr, "timeout", "5s", "Timeout duration for upstream dial")
+	flag.BoolVar(&notimer, "notimer", false, "Disable timer, effectively disabling -timeout")
 	flag.IntVar(&clientBufferSize, "clientbuffersize", 4096, "Client buffer size in bytes")
 	flag.IntVar(&upstreamBufferSize, "upstreambuffersize", 4096, "Upstream buffer size in bytes")
 
@@ -225,10 +227,14 @@ func parseDur(t, k string) (d time.Duration) {
 }
 
 func makeDeadlineCtx() (ctx context.Context, cancel context.CancelFunc) {
-	ctx, cancel = context.WithDeadlineCause(
-		gctx,
-		time.Now().Add(timeout),
-		fmt.Errorf("Connection to upstream is timed out."),
-	)
+	if notimer {
+		ctx, cancel = context.WithCancel(context.Background())
+	} else {
+		ctx, cancel = context.WithDeadlineCause(
+			gctx,
+			time.Now().Add(timeout),
+			fmt.Errorf("Connection to upstream is timed out."),
+		)
+	}
 	return
 }
