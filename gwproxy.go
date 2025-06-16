@@ -31,9 +31,9 @@ var gctx_cancel context.CancelFunc
 var wg sync.WaitGroup
 
 type Session struct {
-	upstream net.Conn
-	once     sync.Once
-	wg       sync.WaitGroup
+	clientCloseOnce   sync.Once
+	upstreamCloseOnce sync.Once
+	wg                sync.WaitGroup
 
 	Client   net.Conn
 	ClientIP string
@@ -177,7 +177,7 @@ func startListening() {
 func (s *Session) handle() {
 	ctx, cancel := makeDeadlineCtx()
 
-	defer s.once.Do(func() { s.Client.Close() }) // close client after copy. Call this one time and only.
+	defer s.clientCloseOnce.Do(func() { s.Client.Close() }) // close client after copy. Call this one time and only.
 	defer cancel()
 
 	upstream, err := dialer.DialContext(ctx, proto, targetAddr)
@@ -191,6 +191,7 @@ func (s *Session) handle() {
 	}
 
 	cancel()
+	defer s.upstreamCloseOnce.Do(func() { upstream.Close() })
 
 	if tcpConn, ok := upstream.(*net.TCPConn); ok {
 		// This is a TCP connection. Establish NODELAY
@@ -209,7 +210,6 @@ func (s *Session) handle() {
 
 func (s *Session) feedStream(dst, src net.Conn) {
 	defer s.wg.Done()
-	defer s.once.Do(func() { dst.Close() })
 	buf := make([]byte, upstreamBufferSize)
 
 	io.CopyBuffer(dst, src, buf)
