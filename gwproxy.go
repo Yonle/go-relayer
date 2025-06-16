@@ -19,6 +19,9 @@ var ListenAddr string
 var targetAddr string
 var timeout time.Duration
 
+var clientBufferSize int
+var upstreamBufferSize int
+
 var dialer net.Dialer
 var listenconf net.ListenConfig
 var listener net.Listener
@@ -39,6 +42,8 @@ func main() {
 	flag.StringVar(&ListenAddr, "from", "", "Listen to address")
 	flag.StringVar(&targetAddr, "to", "", "Upstream target address")
 	flag.StringVar(&timeoutStr, "timeout", "5s", "Timeout duration for upstream dial")
+	flag.IntVar(&clientBufferSize, "clientbuffersize", 4096, "Client buffer size in bytes")
+	flag.IntVar(&upstreamBufferSize, "upstreambuffersize", 4096, "Upstream buffer size in bytes")
 
 	flag.BoolVar(&keepAlive, "keepalive", false, "Enable KeepAlive (TCP)")
 	flag.StringVar(&keepAlive_IdleStr, "keepalive-idle", "15s", "Keep Alive idle duration")
@@ -183,14 +188,18 @@ func handleConn(conn net.Conn, c_ip string) {
 		}
 	}
 
-	go feedToClient(conn, upstream) // conn <- upstream
-	io.Copy(upstream, conn)         // upstream <- conn
+	go fromUpstreamToClient(conn, upstream) // conn <- upstream
+
+	buf := make([]byte, clientBufferSize)
+	io.CopyBuffer(upstream, conn, buf) // upstream <- conn
 }
 
-func feedToClient(c, u net.Conn) {
+func fromUpstreamToClient(c, u net.Conn) {
 	defer u.Close() // close upstream after copy
 
-	io.Copy(c, u)
+	buf := make([]byte, upstreamBufferSize)
+
+	io.CopyBuffer(c, u, buf)
 }
 
 func parseDur(t, k string) (d time.Duration) {

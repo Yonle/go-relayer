@@ -7,24 +7,27 @@ could be useful.
 100% only using stdlib. concurrency is achieved via goroutine.
 
 ```
-$ ./gwproxy
 Usage of ./gwproxy:
   -bind string
-        Dial to upstream with specified local IP address (Bind)
+    	Dial to upstream with specified local IP address (Bind)
+  -clientbuffersize int
+    	Client buffer size in bytes (default 4096)
   -from string
-        Listen to address
+    	Listen to address
   -keepalive
-        Enable KeepAlive (TCP)
+    	Enable KeepAlive (TCP)
   -keepalive-idle string
-        Keep Alive idle duration (default "15s")
+    	Keep Alive idle duration (default "15s")
   -keepalive-interval string
-        Keep Alive interval duration (default "15s")
+    	Keep Alive interval duration (default "15s")
   -proto string
-        Protocol to use (default "tcp")
+    	Protocol to use (default "tcp")
   -timeout string
-        Timeout duration for upstream dial (default "5s")
+    	Timeout duration for upstream dial (default "5s")
   -to string
-        Upstream target address
+    	Upstream target address
+  -upstreambuffersize int
+    	Upstream buffer size in bytes (default 4096)
 ```
 
 ## compiling
