@@ -188,18 +188,16 @@ func handleConn(conn net.Conn, c_ip string) {
 		}
 	}
 
-	go fromUpstreamToClient(conn, upstream) // conn <- upstream
+	go fromClientToUpstream(conn, upstream) // conn -> upstream
 
 	buf := make([]byte, clientBufferSize)
-	io.CopyBuffer(upstream, conn, buf) // upstream <- conn
+	io.CopyBuffer(conn, upstream, buf) // upstream -> conn
 }
 
-func fromUpstreamToClient(c, u net.Conn) {
-	defer u.Close() // close upstream after copy
-
+func fromClientToUpstream(c, u net.Conn) {
 	buf := make([]byte, upstreamBufferSize)
 
-	io.CopyBuffer(c, u, buf)
+	io.CopyBuffer(u, c, buf)
 }
 
 func parseDur(t, k string) (d time.Duration) {
