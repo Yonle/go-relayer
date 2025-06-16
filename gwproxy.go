@@ -49,7 +49,7 @@ func main() {
 
 	flag.StringVar(&proto, "proto", "tcp", "Protocol to use")
 	flag.StringVar(&ListenAddr, "from", "", "Listen to address")
-	flag.StringVar(&targetAddr, "to", "", "Upstream target address")
+	flag.StringVar(&targetAddr, "to", "", "Destination to upstream address")
 	flag.StringVar(&timeoutStr, "timeout", "5s", "Timeout duration for upstream dial")
 	flag.IntVar(&clientBufferSize, "clientbuffersize", 4096, "Client buffer size in bytes")
 	flag.IntVar(&upstreamBufferSize, "upstreambuffersize", 4096, "Upstream buffer size in bytes")

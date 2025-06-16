@@ -25,7 +25,7 @@ Usage of ./gwproxy:
   -timeout string
     	Timeout duration for upstream dial (default "5s")
   -to string
-    	Upstream target address
+    	Destination upstream address
   -upstreambuffersize int
     	Upstream buffer size in bytes (default 4096)
 ```
