@@ -154,13 +154,6 @@ func startListening() {
 
 		ip := conn.RemoteAddr().String()
 
-		if tcpConn, ok := conn.(*net.TCPConn); ok {
-			// This is a TCP connection. Establish NODELAY
-			if err := tcpConn.SetNoDelay(true); err != nil {
-				log.Println(ip, "client SetNoDelay(true) failed:", err)
-			}
-		}
-
 		// Let different conn to handle it
 		s := Session{
 			Client:   conn,
@@ -190,28 +183,32 @@ func (s *Session) handle() {
 	cancel()
 	defer upstream.Close()
 
-	if tcpConn, ok := upstream.(*net.TCPConn); ok {
-		// This is a TCP connection. Establish NODELAY
-		if err := tcpConn.SetNoDelay(true); err != nil {
-			log.Println(s.ClientIP, "upstream SetNoDelay(true) failed:", err)
-		}
-	}
-
 	s.wg.Add(2)
 
-	go s.feedStream(s.Client, upstream) // conn -> upstream
-	go s.feedStream(upstream, s.Client)
+	go s.feedStream(s.Client, upstream, targetAddr) // conn -> upstream
+	go s.feedStream(upstream, s.Client, s.ClientIP)
 
 	s.wg.Wait() // wait till all of them closes.
 }
 
-func (s *Session) feedStream(dst, src net.Conn) {
+func (s *Session) feedStream(dst, src net.Conn, host string) {
 	defer s.wg.Done()
+
+	if tcpConn, ok := src.(*net.TCPConn); ok {
+		// This is a TCP connection. Establish NODELAY
+		if err := tcpConn.SetNoDelay(true); err != nil {
+			log.Println(host, "conn SetNoDelay(true) failed:", err)
+		}
+	}
 	buf := make([]byte, upstreamBufferSize)
 
 	io.CopyBuffer(dst, src, buf)
 	if dst_tcpConn, ok := dst.(*net.TCPConn); ok {
-		dst_tcpConn.CloseWrite() // we close write.
+		dst_tcpConn.CloseWrite() // we close further write to upstream.
+	}
+
+	if src_tcpConn, ok := src.(*net.TCPConn); ok {
+		src_tcpConn.CloseRead() // we close further read from client.
 	}
 }
 
