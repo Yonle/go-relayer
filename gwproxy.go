@@ -30,6 +30,15 @@ var gctx context.Context
 var gctx_cancel context.CancelFunc
 var wg sync.WaitGroup
 
+type Session struct {
+	upstream net.Conn
+	once     sync.Once
+	wg       sync.WaitGroup
+
+	Client   net.Conn
+	ClientIP string
+}
+
 func main() {
 	var timeoutStr string
 	var keepAlive bool
@@ -156,17 +165,19 @@ func startListening() {
 		}
 
 		// Let different conn to handle it
-		go handleConn(conn, ip)
+		s := Session{
+			Client:   conn,
+			ClientIP: ip,
+		}
+
+		s.handle()
 	}
 }
 
-func handleConn(conn net.Conn, c_ip string) {
-	wg.Add(1)
-
+func (s *Session) handle() {
 	ctx, cancel := makeDeadlineCtx()
 
-	defer wg.Done()
-	defer conn.Close() // close client after copy
+	defer s.once.Do(func() { s.Client.Close() }) // close client after copy. Call this one time and only.
 	defer cancel()
 
 	upstream, err := dialer.DialContext(ctx, proto, targetAddr)
@@ -175,29 +186,33 @@ func handleConn(conn net.Conn, c_ip string) {
 		if gctx_err := gctx.Err(); gctx_err != nil {
 			return
 		}
-		log.Println(c_ip, "failed dialing to upstream:", err)
+		log.Println(s.ClientIP, "failed dialing to upstream:", err)
 		return
 	}
 
-	defer upstream.Close()
+	cancel()
 
 	if tcpConn, ok := upstream.(*net.TCPConn); ok {
 		// This is a TCP connection. Establish NODELAY
 		if err := tcpConn.SetNoDelay(true); err != nil {
-			log.Println(c_ip, "upstream SetNoDelay(true) failed:", err)
+			log.Println(s.ClientIP, "upstream SetNoDelay(true) failed:", err)
 		}
 	}
 
-	go fromClientToUpstream(conn, upstream) // conn -> upstream
+	s.wg.Add(2)
 
-	buf := make([]byte, clientBufferSize)
-	io.CopyBuffer(conn, upstream, buf) // upstream -> conn
+	go s.feedStream(s.Client, upstream) // conn -> upstream
+	go s.feedStream(upstream, s.Client)
+
+	s.wg.Wait() // wait till all of them closes.
 }
 
-func fromClientToUpstream(c, u net.Conn) {
+func (s *Session) feedStream(dst, src net.Conn) {
+	defer s.wg.Done()
+	defer s.once.Do(func() { dst.Close() })
 	buf := make([]byte, upstreamBufferSize)
 
-	io.CopyBuffer(u, c, buf)
+	io.CopyBuffer(dst, src, buf)
 }
 
 func parseDur(t, k string) (d time.Duration) {
