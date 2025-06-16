@@ -8,6 +8,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -18,7 +20,12 @@ var targetAddr string
 var timeout time.Duration
 
 var dialer net.Dialer
-var listener net.ListenConfig
+var listenconf net.ListenConfig
+var listener net.Listener
+
+var gctx context.Context
+var gctx_cancel context.CancelFunc
+var wg sync.WaitGroup
 
 func main() {
 	var timeoutStr string
@@ -60,11 +67,36 @@ func main() {
 	}
 
 	timeout = parseDur(timeoutStr, "timeout")
+	listenconf.KeepAliveConfig = keepAliveConf
 
-	listener.KeepAliveConfig = keepAliveConf
-
+	makeGlobalCtx()
 	prepareRLimit()
 	startListening()
+
+	log.Println("Waiting for all remaining connections to close...")
+	wg.Wait()
+}
+
+func makeGlobalCtx() {
+	gctx, gctx_cancel = context.WithCancel(context.Background())
+	go listenForSignal()
+}
+
+func listenForSignal() {
+	c := make(chan os.Signal, 1)
+
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	<-c // Synchronous: Wait for signal
+
+	log.Println("SIGINT/SIGTERM received.")
+
+	gctx_cancel()
+	log.Println("Global context has been cancelled.")
+
+	if listener != nil {
+		listener.Close()
+	}
 }
 
 func prepareRLimit() {
@@ -87,11 +119,10 @@ func prepareRLimit() {
 }
 
 func startListening() {
-	var listen net.Listener
 	var err error
 
 	log.Printf("[Proto: %s] Now listening to %s", proto, ListenAddr)
-	listen, err = listener.Listen(context.Background(), proto, ListenAddr)
+	listener, err = listenconf.Listen(gctx, proto, ListenAddr)
 
 	if err != nil {
 		log.Fatal(err)
@@ -100,8 +131,12 @@ func startListening() {
 	var conn net.Conn
 
 	for {
-		conn, err = listen.Accept()
+		conn, err = listener.Accept()
 		if err != nil {
+			if gctx_err := gctx.Err(); gctx_err != nil {
+				log.Println("Stopped listening:", gctx_err)
+				return
+			}
 			log.Println("failed accepting incomming conn:", err)
 			continue
 		}
@@ -121,11 +156,20 @@ func startListening() {
 }
 
 func handleConn(conn net.Conn, c_ip string) {
-	defer conn.Close() // close client after copy
+	wg.Add(1)
 
-	upstream, err := dialer.DialContext(makeDeadlineCtx(), proto, targetAddr)
+	ctx, cancel := makeDeadlineCtx()
+
+	defer wg.Done()
+	defer conn.Close() // close client after copy
+	defer cancel()
+
+	upstream, err := dialer.DialContext(ctx, proto, targetAddr)
 
 	if err != nil {
+		if gctx_err := gctx.Err(); gctx_err != nil {
+			return
+		}
 		log.Println(c_ip, "failed dialing to upstream:", err)
 		return
 	}
@@ -154,15 +198,15 @@ func parseDur(t, k string) (d time.Duration) {
 	d, err = time.ParseDuration(t)
 
 	if err != nil {
-		log.Printf("Failed to parse duration value of %s: %v", k, err)
+		log.Fatalf("Failed to parse duration value of %s: %v", k, err)
 	}
 
 	return
 }
 
-func makeDeadlineCtx() (ctx context.Context) {
-	ctx, _ = context.WithDeadlineCause(
-		context.Background(),
+func makeDeadlineCtx() (ctx context.Context, cancel context.CancelFunc) {
+	ctx, cancel = context.WithDeadlineCause(
+		gctx,
 		time.Now().Add(timeout),
 		fmt.Errorf("Connection to upstream is timed out."),
 	)
