@@ -1,13 +1,11 @@
-# toy: gwproxy
+# go-relayer
 
-a random toy.
-
-could be useful.
+a simple IP relayer.
 
 100% only using stdlib. concurrency is achieved via goroutine.
 
 ```
-Usage of ./gwproxy:
+Usage of ./go-relayer:
   -bind string
     	Dial to upstream with specified local IP address (Bind)
   -clientbuffersize int
@@ -35,5 +33,7 @@ Usage of ./gwproxy:
 you will need atleast go 1.24.2 installed in your system.
 
 ```
-go build -o gwproxy
+go build -o go-relayer
 ```
+
+or just install it to GOPATH by running `go install github.com/Yonle/go-relayer@latest`
