@@ -185,7 +185,7 @@ func (s *Session) handle() {
 
 	s.wg.Add(2)
 
-	go s.feedStream(s.Client, upstream, targetAddr) // conn -> upstream
+	go s.feedStream(s.Client, upstream, targetAddr)
 	go s.feedStream(upstream, s.Client, s.ClientIP)
 
 	s.wg.Wait() // wait till all of them closes.
