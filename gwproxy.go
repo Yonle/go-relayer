@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -28,7 +29,6 @@ var listener net.Listener
 
 var gctx context.Context
 var gctx_cancel context.CancelFunc
-var wg sync.WaitGroup
 
 type Session struct {
 	clientCloseOnce   sync.Once
@@ -86,9 +86,6 @@ func main() {
 	makeGlobalCtx()
 	prepareRLimit()
 	startListening()
-
-	log.Println("Waiting for all remaining connections to close...")
-	wg.Wait()
 }
 
 func makeGlobalCtx() {
@@ -109,6 +106,7 @@ func listenForSignal() {
 	log.Println("Global context has been cancelled.")
 
 	if listener != nil {
+		log.Println("Waiting for all remaining connections to close...")
 		listener.Close()
 	}
 }
@@ -147,8 +145,7 @@ func startListening() {
 	for {
 		conn, err = listener.Accept()
 		if err != nil {
-			if gctx_err := gctx.Err(); gctx_err != nil {
-				log.Println("Stopped listening:", gctx_err)
+			if errors.Is(err, net.ErrClosed) {
 				return
 			}
 			log.Println("failed accepting incomming conn:", err)
@@ -213,6 +210,9 @@ func (s *Session) feedStream(dst, src net.Conn) {
 	buf := make([]byte, upstreamBufferSize)
 
 	io.CopyBuffer(dst, src, buf)
+	if dst_tcpConn, ok := dst.(*net.TCPConn); ok {
+		dst_tcpConn.CloseWrite() // we close write.
+	}
 }
 
 func parseDur(t, k string) (d time.Duration) {
