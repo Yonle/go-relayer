@@ -140,9 +140,8 @@ func startListening() {
 		log.Fatal(err)
 	}
 
-	var conn net.Conn
-
 	for {
+		var conn net.Conn
 		conn, err = listener.Accept()
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
