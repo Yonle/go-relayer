@@ -31,6 +31,8 @@ var listener net.Listener
 var gctx context.Context
 var gctx_cancel context.CancelFunc
 
+var bfpool *sync.Pool
+
 type Session struct {
 	wg sync.WaitGroup
 
@@ -82,6 +84,12 @@ func main() {
 
 	timeout = parseDur(timeoutStr, "timeout")
 	listenconf.KeepAliveConfig = keepAliveConf
+
+	bfpool = &sync.Pool{
+		New: func() any {
+			return make([]byte, upstreamBufferSize)
+		},
+	}
 
 	makeGlobalCtx()
 	prepareRLimit()
@@ -199,7 +207,8 @@ func (s *Session) feedStream(dst, src net.Conn, host string) {
 			log.Println(host, "conn SetNoDelay(true) failed:", err)
 		}
 	}
-	buf := make([]byte, upstreamBufferSize)
+	buf := bfpool.Get().([]byte)
+	defer bfpool.Put(buf)
 
 	io.CopyBuffer(dst, src, buf)
 	if dst_tcpConn, ok := dst.(*net.TCPConn); ok {
