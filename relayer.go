@@ -15,11 +15,11 @@ import (
 	"time"
 )
 
-var proto string
 var ListenAddr string
 var targetAddr string
 var timeout time.Duration
 var notimer bool
+var nodelay bool
 
 var clientBufferSize int
 var upstreamBufferSize int
@@ -48,11 +48,11 @@ func main() {
 
 	var bindAddr string
 
-	flag.StringVar(&proto, "proto", "tcp", "Protocol to use")
 	flag.StringVar(&ListenAddr, "from", "", "Listen to address")
 	flag.StringVar(&targetAddr, "to", "", "Destination to upstream address")
 	flag.StringVar(&timeoutStr, "timeout", "5s", "Timeout duration for upstream dial")
 	flag.BoolVar(&notimer, "notimer", false, "Disable timer, effectively disabling -timeout")
+	flag.BoolVar(&nodelay, "nodelay", false, "Use Nagle's algorithm to minimize latency.")
 	flag.IntVar(&clientBufferSize, "clientbuffersize", 4096, "Client buffer size in bytes")
 	flag.IntVar(&upstreamBufferSize, "upstreambuffersize", 4096, "Upstream buffer size in bytes")
 
@@ -141,8 +141,8 @@ func prepareRLimit() {
 func startListening() {
 	var err error
 
-	log.Printf("[Proto: %s] Now listening to %s", proto, ListenAddr)
-	listener, err = listenconf.Listen(gctx, proto, ListenAddr)
+	log.Printf("[Proto: %s] Now listening to %s", "tcp", ListenAddr)
+	listener, err = listenconf.Listen(gctx, "tcp", ListenAddr)
 
 	if err != nil {
 		log.Fatal(err)
@@ -177,7 +177,7 @@ func (s *Session) handle() {
 	defer s.Client.Close() // close client after copy.
 	defer cancel()
 
-	upstream, err := dialer.DialContext(ctx, proto, targetAddr)
+	upstream, err := dialer.DialContext(ctx, "tcp", targetAddr)
 
 	if err != nil {
 		if gctx_err := gctx.Err(); gctx_err != nil {
@@ -201,23 +201,21 @@ func (s *Session) handle() {
 func (s *Session) feedStream(dst, src net.Conn, host string) {
 	defer s.wg.Done()
 
-	if tcpConn, ok := src.(*net.TCPConn); ok {
-		// This is a TCP connection. Establish NODELAY
-		if err := tcpConn.SetNoDelay(true); err != nil {
-			log.Println(host, "conn SetNoDelay(true) failed:", err)
-		}
+	dst_tcpConn := dst.(*net.TCPConn)
+	src_tcpConn := src.(*net.TCPConn)
+
+	if nodelay {
+		dst_tcpConn.SetNoDelay(true)
+		src_tcpConn.SetNoDelay(true)
 	}
+
 	buf := bfpool.Get().([]byte)
 	defer bfpool.Put(buf)
 
 	io.CopyBuffer(dst, src, buf)
-	if dst_tcpConn, ok := dst.(*net.TCPConn); ok {
-		dst_tcpConn.CloseWrite() // we close further write to upstream.
-	}
 
-	if src_tcpConn, ok := src.(*net.TCPConn); ok {
-		src_tcpConn.CloseRead() // we close further read from client.
-	}
+	dst_tcpConn.CloseWrite() // we close further write to upstream.
+	src_tcpConn.CloseRead()  // we close further read from client.
 }
 
 func parseDur(t, k string) (d time.Duration) {
